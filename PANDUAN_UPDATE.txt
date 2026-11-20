@@ -1,0 +1,33 @@
+SANTRIFY ASROR - PANDUAN PEMASANGAN PEMBARUAN
+
+FITUR YANG DITAMBAHKAN
+1. Pengingat salat merah berbentuk panel bawah sekitar setengah layar.
+2. Waktu salat otomatis berdasarkan lokasi perangkat melalui API AlAdhan (metode 20 / Kemenag Indonesia).
+3. Checklist salat tersambung ke pengingat; salat yang sudah dicentang tidak diperingatkan lagi.
+4. Role admin dan pengguna. Pendaftaran publik selalu menjadi pengguna.
+5. Dashboard admin hanya untuk memantau checklist salat seluruh pengguna (read-only).
+6. Admin tidak dapat membuka halaman fitur pribadi santri.
+
+CARA UPDATE DATABASE
+1. Backup database db_santrify terlebih dahulu.
+2. Buka phpMyAdmin atau HeidiSQL.
+3. Pilih database db_santrify.
+4. Jalankan isi file database/upgrade_role_admin.sql satu kali.
+
+CARA MEMBUAT AKUN ADMIN
+1. Daftarkan akun biasa melalui register.php.
+2. Buka tabel pengguna di phpMyAdmin.
+3. Jalankan SQL berikut dengan username akun yang akan dijadikan admin:
+   UPDATE pengguna SET role = 'admin' WHERE username = 'username_admin';
+4. Logout lalu login kembali. Akun akan masuk ke admin.php.
+
+CATATAN WAKTU SALAT
+- Browser akan meminta izin lokasi. Pilih Allow/Izinkan.
+- Geolocation umumnya memerlukan localhost atau HTTPS.
+- Peringatan berjalan ketika aplikasi/halaman Santrify sedang terbuka.
+- Jika browser ditutup, PHP lokal tidak dapat memunculkan pop-up. Notifikasi saat aplikasi tertutup memerlukan PWA/push notification dan server pendukung.
+- Koneksi internet diperlukan untuk mengambil jadwal dari AlAdhan.
+- Jam lokal perangkat harus benar.
+
+CATATAN DATA
+Dashboard admin menghitung data checklist yang dicatat oleh pengguna. Ini bukan bukti verifikasi bahwa salat benar-benar dilaksanakan.
