@@ -37,6 +37,7 @@ function wajibAdmin() {
     }
 }
 
+// Cek apakah user baru sudah mengatur jadwal wajib (PRD v1.2 Bagian 3.2)
 function cekJadwalWajib($pdo, $pengguna_id) {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM jadwal_harian WHERE pengguna_id = ?");
     $stmt->execute([$pengguna_id]);
@@ -46,6 +47,7 @@ function cekJadwalWajib($pdo, $pengguna_id) {
     }
 }
 
+// Pemberian Poin Anti-Duplikasi (PRD v1.2 Bagian 4.2)
 function tambahPoin($pdo, $pengguna_id, $poin, $keterangan, $sumber_unik) {
     $stmt = $pdo->prepare("INSERT IGNORE INTO riwayat_poin (pengguna_id, jumlah_poin, keterangan, sumber_transaksi) VALUES (?, ?, ?, ?)");
     $stmt->execute([$pengguna_id, $poin, $keterangan, $sumber_unik]);
@@ -73,6 +75,9 @@ function simpanSetoranHafalan(PDO $pdo, int $pengguna_id, string $surah, string 
     return (bool)$ok;
 }
 
+/**
+ * Menghitung persentase gabungan Jadwal Harian (hari ini) + Tugas (selesai vs total)
+ */
 function hitungPersentaseJadwalTugas(PDO $pdo, int $pengguna_id): array {
     $hari_ini = date('Y-m-d');
 
@@ -120,6 +125,9 @@ function hitungPersentaseJadwalTugas(PDO $pdo, int $pengguna_id): array {
     ];
 }
 
+/**
+ * Menghitung persentase gabungan Jadwal + Tugas untuk periode 1 Hari, 1 Minggu, dan 1 Bulan
+ */
 function hitungPersentasePeriodeJadwalTugas(PDO $pdo, int $pengguna_id): array {
     $hari_ini = date('Y-m-d');
     $senin_ini = date('Y-m-d', strtotime('monday this week'));
@@ -175,6 +183,65 @@ function hitungPersentasePeriodeJadwalTugas(PDO $pdo, int $pengguna_id): array {
     ];
 }
 
+/**
+ * Menghitung progres penyelesaian tugas per hari dari Senin sampai Minggu (minggu berjalan)
+ */
+function hitungProgresTugasMingguan(PDO $pdo, int $pengguna_id): array {
+    $senin_ini = date('Y-m-d', strtotime('monday this week'));
+    $nama_hari = [
+        1 => 'Senin',
+        2 => 'Selasa',
+        3 => 'Rabu',
+        4 => 'Kamis',
+        5 => 'Jumat',
+        6 => 'Sabtu',
+        7 => 'Minggu',
+    ];
+
+    $stmt = $pdo->prepare("
+        SELECT
+            DATE(tenggat_waktu) AS tgl,
+            COUNT(*) AS total_tugas,
+            COALESCE(SUM(CASE WHEN status = 'Selesai' THEN 1 ELSE 0 END), 0) AS selesai_tugas
+        FROM tugas
+        WHERE pengguna_id = ?
+          AND tenggat_waktu IS NOT NULL
+          AND DATE(tenggat_waktu) BETWEEN ? AND DATE_ADD(?, INTERVAL 6 DAY)
+        GROUP BY DATE(tenggat_waktu)
+    ");
+    $stmt->execute([$pengguna_id, $senin_ini, $senin_ini]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $map_tgl = [];
+    foreach ($rows as $r) {
+        $map_tgl[$r['tgl']] = [
+            'total'   => (int)($r['total_tugas'] ?? 0),
+            'selesai' => (int)($r['selesai_tugas'] ?? 0),
+        ];
+    }
+
+    $hasil = [];
+    $hari_ini = date('Y-m-d');
+    for ($i = 0; $i < 7; $i++) {
+        $tgl = date('Y-m-d', strtotime($senin_ini . " +{$i} days"));
+        $total = $map_tgl[$tgl]['total'] ?? 0;
+        $selesai = min($total, $map_tgl[$tgl]['selesai'] ?? 0);
+        $persen = $total > 0 ? (int)round(($selesai / $total) * 100) : 0;
+
+        $hasil[] = [
+            'hari'     => $nama_hari[$i + 1],
+            'tanggal'  => $tgl,
+            'selesai'  => $selesai,
+            'total'    => $total,
+            'persen'   => $persen,
+            'is_today' => ($tgl === $hari_ini),
+        ];
+    }
+
+    return $hasil;
+}
+
+// Hitung Progres Harian, Mingguan, Bulanan (PRD v1.2 Bagian 3.5 & 4.1)
 function hitungProgres($pdo, $pengguna_id) {
     $hari_ini = date('Y-m-d');
     $senin_ini = date('Y-m-d', strtotime('monday this week'));
@@ -243,6 +310,7 @@ function hitungProgres($pdo, $pengguna_id) {
     ];
 }
 
+// 31 Kalimat Penyemangat Harian (PRD v1.1 Bagian 8.11)
 function getPenyemangatHarian() {
     $quotes = [
         "Setiap ayat yang kau ulang hari ini adalah cahaya bagi orang tuamu di akhirat kelak.",

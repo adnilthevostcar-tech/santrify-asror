@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['simpan_cepat'])) {
 
 $progres = hitungProgres($pdo, $uid);
 $periode_ring = hitungPersentasePeriodeJadwalTugas($pdo, (int)$uid);
+$tugas_mingguan = hitungProgresTugasMingguan($pdo, (int)$uid);
 
 // Total Poin & Pangkat
 $stmt = $pdo->prepare("SELECT COALESCE(SUM(jumlah_poin), 0) FROM riwayat_poin WHERE pengguna_id = ?");
@@ -85,12 +86,71 @@ renderHeader('Beranda');
     background: #ffffff;
     position: absolute;
 }
+[data-theme="dark"] .donut-ring::before {
+    background: #1b1f24;
+}
 .donut-label {
     position: relative;
     z-index: 1;
     font-weight: 700;
     color: #095f1f;
     font-size: 1.05rem;
+}
+[data-theme="dark"] .donut-label {
+    color: #4ade80;
+}
+.balok-kurva-wrap {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 10px;
+    align-items: end;
+    min-height: 210px;
+    padding: 16px 12px 10px;
+    border-radius: 16px;
+    background: rgba(9, 95, 31, 0.04);
+    border: 1px solid rgba(9, 95, 31, 0.12);
+}
+[data-theme="dark"] .balok-kurva-wrap {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.balok-kolom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+}
+.balok-track {
+    width: 100%;
+    max-width: 44px;
+    height: 135px;
+    border-radius: 12px 12px 6px 6px;
+    background: rgba(148, 163, 184, 0.2);
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    position: relative;
+}
+.balok-fill {
+    width: 100%;
+    border-radius: 10px 10px 4px 4px;
+    transition: height 0.35s ease;
+    min-height: 4px;
+}
+.balok-persen {
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.balok-hari {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-top: 8px;
+}
+.balok-sub {
+    font-size: 0.7rem;
+    opacity: 0.75;
 }
 </style>
 
@@ -265,6 +325,97 @@ renderHeader('Beranda');
                         <td><?= (int)$periode_ring['bulan']['selesai'] ?> / <?= (int)$periode_ring['bulan']['total'] ?></td>
                         <td><?= (int)$periode_ring['bulan']['persen'] ?>%</td>
                     </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Riwayat / Kurva Balok Penyelesaian Tugas (Senin - Minggu) di bawah Diagram Lingkaran -->
+    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <h5 class="fw-bold mb-1" style="color: #095f1f;">
+                    <i class="bi bi-clock-history me-1"></i> Riwayat &amp; Kurva Balok Penyelesaian Tugas (Senin – Minggu)
+                </h5>
+                <small class="text-muted">Memantau riwayat dan arah tren penyelesaian tugas apakah semakin meningkat atau menurun.</small>
+            </div>
+            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-2">
+                Pekan Ini: <?= date('d M', strtotime('monday this week')) ?> – <?= date('d M Y', strtotime('sunday this week')) ?>
+            </span>
+        </div>
+
+        <div class="balok-kurva-wrap mb-3">
+            <?php
+            $prev_persen = null;
+            foreach ($tugas_mingguan as $h):
+                $pct = (int)$h['persen'];
+                $tinggi = $h['total'] > 0 ? max(8, $pct) : 4;
+                if ($h['total'] === 0) {
+                    $warna_balok = 'rgba(148, 163, 184, 0.45)';
+                } elseif ($prev_persen !== null && $pct > $prev_persen) {
+                    $warna_balok = '#16a34a';
+                } elseif ($prev_persen !== null && $pct < $prev_persen) {
+                    $warna_balok = '#ef4444';
+                } else {
+                    $warna_balok = '#095f1f';
+                }
+                $prev_persen = $pct;
+            ?>
+            <div class="balok-kolom">
+                <div class="balok-persen"><?= $pct ?>%</div>
+                <div class="balok-track" title="<?= htmlspecialchars($h['hari']) ?>: <?= $h['selesai'] ?>/<?= $h['total'] ?> tugas selesai (<?= $pct ?>%)">
+                    <div class="balok-fill" style="height: <?= $tinggi ?>%; background-color: <?= $warna_balok ?>;"></div>
+                </div>
+                <div class="balok-hari">
+                    <?= htmlspecialchars($h['hari']) ?>
+                    <?php if ($h['is_today']): ?>
+                        <span class="badge bg-warning text-dark ms-1" style="font-size: 0.62rem;">Hari Ini</span>
+                    <?php endif; ?>
+                </div>
+                <div class="balok-sub"><?= $h['selesai'] ?>/<?= $h['total'] ?> tugas</div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm align-middle mb-0 text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>Hari</th>
+                        <th>Tanggal</th>
+                        <th>Riwayat Tugas Selesai</th>
+                        <th>Persentase</th>
+                        <th>Arah Tren</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $prev = null;
+                    foreach ($tugas_mingguan as $h):
+                        $pct = (int)$h['persen'];
+                        if ($h['total'] === 0) {
+                            $tren_badge = '<span class="badge bg-secondary-subtle text-secondary">Tidak ada jadwal tugas</span>';
+                        } elseif ($prev === null) {
+                            $tren_badge = '<span class="badge bg-primary-subtle text-primary">Titik Awal Pekan</span>';
+                        } elseif ($pct > $prev) {
+                            $selisih = $pct - $prev;
+                            $tren_badge = '<span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up-right"></i> Naik +' . $selisih . '%</span>';
+                        } elseif ($pct < $prev) {
+                            $selisih = $prev - $pct;
+                            $tren_badge = '<span class="badge bg-danger-subtle text-danger"><i class="bi bi-arrow-down-right"></i> Menurun -' . $selisih . '%</span>';
+                        } else {
+                            $tren_badge = '<span class="badge bg-info-subtle text-info"><i class="bi bi-dash"></i> Stabil (0%)</span>';
+                        }
+                        $prev = $pct;
+                    ?>
+                    <tr class="<?= $h['is_today'] ? 'table-success fw-semibold' : '' ?>">
+                        <td><?= htmlspecialchars($h['hari']) ?></td>
+                        <td><?= date('d/m/Y', strtotime($h['tanggal'])) ?></td>
+                        <td><?= (int)$h['selesai'] ?> / <?= (int)$h['total'] ?></td>
+                        <td><?= $pct ?>%</td>
+                        <td><?= $tren_badge ?></td>
+                    </tr>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </div>

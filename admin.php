@@ -96,6 +96,51 @@ renderHeader('Admin - Pemantauan Santri');
         background-color: #1b1f24;
         color: #eef2f6;
     }
+    .mini-bar-wrap {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 6px;
+        align-items: end;
+        padding: 10px 8px 6px;
+        border-radius: 12px;
+        background: rgba(9, 95, 31, 0.04);
+        border: 1px solid rgba(9, 95, 31, 0.1);
+        margin-top: 8px;
+    }
+    [data-theme="dark"] .mini-bar-wrap {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+    .mini-bar-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .mini-bar-pct {
+        font-size: 0.65rem;
+        font-weight: 700;
+        margin-bottom: 3px;
+    }
+    .mini-bar-track {
+        width: 100%;
+        max-width: 24px;
+        height: 46px;
+        border-radius: 6px 6px 3px 3px;
+        background: rgba(148, 163, 184, 0.22);
+        display: flex;
+        align-items: flex-end;
+        overflow: hidden;
+    }
+    .mini-bar-fill {
+        width: 100%;
+        border-radius: 5px 5px 2px 2px;
+        min-height: 3px;
+    }
+    .mini-bar-day {
+        font-size: 0.65rem;
+        font-weight: 600;
+        margin-top: 4px;
+    }
 </style>
 
 <div class="container my-4">
@@ -106,7 +151,7 @@ renderHeader('Admin - Pemantauan Santri');
                     ADMIN • MONITORING LENGKAP
                 </span>
                 <h2 class="fw-bold mb-1">Dashboard Pemantauan Santri</h2>
-                <p class="mb-0 opacity-90 small">Pantau progres jadwal & tugas harian, mingguan, bulanan, diagram persentase, serta kelola akun santri.</p>
+                <p class="mb-0 opacity-90 small">Pantau progres jadwal & tugas harian, mingguan, bulanan, diagram persentase & batang mingguan, serta kelola akun santri.</p>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 <a href="index.php" class="btn btn-outline-light fw-semibold px-3 py-2 rounded-pill">
@@ -156,8 +201,8 @@ renderHeader('Admin - Pemantauan Santri');
     <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <div>
-                <h5 class="fw-bold mb-0"><i class="bi bi-pie-chart-fill me-1 text-success"></i> Daftar Akun, Progres & Diagram Persentase</h5>
-                <small class="text-muted">Progres berdasarkan ceklist jadwal harian dan penyelesaian tugas tiap akun.</small>
+                <h5 class="fw-bold mb-0"><i class="bi bi-bar-chart-fill me-1 text-success"></i> Daftar Akun, Progres & Diagram Persentase</h5>
+                <small class="text-muted">Menampilkan progres jadwal & tugas serta diagram batang penyelesaian tugas Senin–Minggu tiap akun.</small>
             </div>
             <span class="badge bg-dark rounded-pill px-3 py-2">Mode Admin</span>
         </div>
@@ -188,6 +233,8 @@ renderHeader('Admin - Pemantauan Santri');
                             $p_hari = $periode['hari'];
                             $p_minggu = $periode['minggu'];
                             $p_bulan = $periode['bulan'];
+
+                            $batang_mingguan = hitungProgresTugasMingguan($pdo, (int)$s['id']);
 
                             $persen_utama = max(0, min(100, (int)($p_hari['persen'] ?? 0)));
                             $sudut = round(($persen_utama / 100) * 360, 1);
@@ -237,6 +284,40 @@ renderHeader('Admin - Pemantauan Santri');
                                 <a href="admin.php?hapus=<?= (int)$s['id'] ?>" class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="return confirm('Yakin ingin menghapus akun santri <?= htmlspecialchars($s['nama_santri'], ENT_QUOTES) ?>? Semua data terkait akan ikut terhapus.')">
                                     <i class="bi bi-trash-fill"></i> Hapus
                                 </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="8" class="pt-0 pb-3 border-top-0">
+                                <div class="d-flex justify-content-between align-items-center small text-muted px-1">
+                                    <span><i class="bi bi-bar-chart-steps me-1 text-success"></i> Diagram Batang Tugas (Sen–Min): <strong><?= htmlspecialchars($s['nama_santri']) ?></strong></span>
+                                    <span><?= date('d M', strtotime('monday this week')) ?> – <?= date('d M Y', strtotime('sunday this week')) ?></span>
+                                </div>
+                                <div class="mini-bar-wrap">
+                                    <?php
+                                    $prev_b = null;
+                                    foreach ($batang_mingguan as $b):
+                                        $bpct = (int)$b['persen'];
+                                        $btinggi = $b['total'] > 0 ? max(10, $bpct) : 6;
+                                        if ($b['total'] === 0) {
+                                            $bwarna = 'rgba(148, 163, 184, 0.45)';
+                                        } elseif ($prev_b !== null && $bpct > $prev_b) {
+                                            $bwarna = '#16a34a';
+                                        } elseif ($prev_b !== null && $bpct < $prev_b) {
+                                            $bwarna = '#ef4444';
+                                        } else {
+                                            $bwarna = '#095f1f';
+                                        }
+                                        $prev_b = $bpct;
+                                    ?>
+                                    <div class="mini-bar-col" title="<?= htmlspecialchars($b['hari']) ?>: <?= $b['selesai'] ?>/<?= $b['total'] ?> tugas selesai (<?= $bpct ?>%)">
+                                        <div class="mini-bar-pct"><?= $bpct ?>%</div>
+                                        <div class="mini-bar-track">
+                                            <div class="mini-bar-fill" style="height: <?= $btinggi ?>%; background-color: <?= $bwarna ?>;"></div>
+                                        </div>
+                                        <div class="mini-bar-day"><?= htmlspecialchars(substr($b['hari'], 0, 3)) ?></div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
